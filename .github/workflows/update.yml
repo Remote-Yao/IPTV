@@ -1,0 +1,36 @@
+name: Update IPTV List
+
+on:
+  schedule:
+    - cron: "0 18 * * *"   # 每天 UTC 18点执行（北京时间+8 = 凌晨2点）
+  workflow_dispatch:        # 允许手动触发
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run IPTV fetcher
+        run: python fetch_china_iptv.py --probe
+
+      - name: Move alive list to tv.m3u
+        run: mv china_iptv_alive.m3u tv.m3u
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add tv.m3u
+          git commit -m "Auto update tv.m3u ($(date -u '+%Y-%m-%d %H:%M:%S'))" || echo "No changes to commit"
+          git push
