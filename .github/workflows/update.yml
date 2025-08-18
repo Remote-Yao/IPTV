@@ -1,9 +1,9 @@
-name: Update IPTV List
+name: Update IPTV List (Debug)
 
 on:
   schedule:
-    - cron: "0 18 * * *"   # 每天 UTC 18点执行（北京时间+8 = 凌晨2点）
-  workflow_dispatch:        # 允许手动触发
+    - cron: "0 0 * * *"   # 每天 0 点运行
+  workflow_dispatch:       # 手动触发
 
 jobs:
   update:
@@ -13,24 +13,52 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Show environment info
+        run: |
+          echo "=== GITHUB REF INFO ==="
+          echo "Branch: $GITHUB_REF"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Actor: $GITHUB_ACTOR"
+          echo "Workspace: $GITHUB_WORKSPACE"
+          python3 --version
+          git --version
+
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.x"
 
       - name: Install dependencies
         run: pip install requests
 
       - name: Run IPTV fetcher
-        run: python fetch_china_iptv.py --probe
+        run: |
+          echo "=== Running IPTV Fetcher ==="
+          python fetch_china_iptv.py --probe || { echo "❌ Script failed"; exit 1; }
+          echo "✅ Script completed"
+
+      - name: Check generated file
+        run: |
+          echo "=== Checking output file ==="
+          ls -lh
+          head -n 20 china_tv_alive.m3u || echo "⚠️ No output file"
 
       - name: Move alive list to tv.m3u
-        run: mv china_iptv_alive.m3u tv.m3u
+        run: |
+          mv china_tv_alive.m3u tv.m3u || echo "⚠️ Move failed, file may not exist"
+          ls -lh tv.m3u || echo "⚠️ tv.m3u not found"
+
+      - name: Git status before commit
+        run: |
+          echo "=== Git Status Before Commit ==="
+          git status
+          git diff --stat || true
 
       - name: Commit and push changes
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add tv.m3u
-          git commit -m "Auto update tv.m3u ($(date -u '+%Y-%m-%d %H:%M:%S'))" || echo "No changes to commit"
-          git push
+          git commit -m "Auto update tv.m3u ($(date -u '+%Y-%m-%d %H:%M:%S'))" || echo "⚠️ No changes to commit"
+          echo "=== Try pushing changes ==="
+          git push || { echo "❌ Git push failed"; exit 1; }
